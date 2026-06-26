@@ -3,7 +3,6 @@ package com.example.chattingapp.viewmodel
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.chattingapp.data.repository.AuthRepository
 import com.example.chattingapp.domain.model.Conversation
 import com.example.chattingapp.domain.usecase.ObserveConversationsUseCase
 import kotlinx.coroutines.CancellationException
@@ -21,7 +20,7 @@ data class ConversationListUiState(
 )
 
 class ConversationListViewModel(
-    private val authRepository: AuthRepository,
+    private val currentUserId: String,
     private val observeConversationsUseCase: ObserveConversationsUseCase
 ) : ViewModel() {
 
@@ -37,40 +36,27 @@ class ConversationListViewModel(
     fun observeConversations() {
         observeConversationsJob?.cancel()
 
-        val currentUser = authRepository.getCurrentUser()
-
-        if (currentUser == null) {
-            _uiState.value = ConversationListUiState(
-                isLoading = false,
-                conversations = emptyList(),
-                errorMessage = null
-            )
-            return
-        }
-
-        _uiState.value = _uiState.value.copy(
+        _uiState.value = ConversationListUiState(
             isLoading = true,
+            conversations = emptyList(),
             errorMessage = null
         )
 
         observeConversationsJob = viewModelScope.launch {
-            observeConversationsUseCase(currentUser.uid)
+            observeConversationsUseCase(currentUserId)
                 .catch { error ->
-                    if (error is CancellationException) {
-                        throw error
-                    }
+                    if (error is CancellationException) throw error
 
-                    Log.e("ConversationListViewModel", "observeConversations failed", error)
+                    Log.e(
+                        "ConversationListViewModel",
+                        "observeConversations failed for userId=$currentUserId",
+                        error
+                    )
 
-                    val stillLoggedIn = authRepository.getCurrentUser() != null
-
-                    _uiState.value = _uiState.value.copy(
+                    _uiState.value = ConversationListUiState(
                         isLoading = false,
-                        errorMessage = if (stillLoggedIn) {
-                            "Không thể tải danh sách cuộc trò chuyện"
-                        } else {
-                            null
-                        }
+                        conversations = emptyList(),
+                        errorMessage = "Không thể tải danh sách cuộc trò chuyện"
                     )
                 }
                 .collect { conversations ->

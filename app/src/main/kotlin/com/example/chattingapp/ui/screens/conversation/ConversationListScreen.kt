@@ -39,6 +39,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -55,6 +56,8 @@ import com.example.chattingapp.core.common.DateTimeFormatter
 import com.example.chattingapp.domain.model.Conversation
 import com.example.chattingapp.domain.model.ConversationType
 import com.example.chattingapp.viewmodel.ConversationListViewModel
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -67,6 +70,10 @@ fun ConversationListScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var showMenu by remember { mutableStateOf(false) }
+
+    val currentUserId = remember {
+        FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
+    }
 
     Scaffold(
         topBar = {
@@ -188,6 +195,7 @@ fun ConversationListScreen(
                         ) { conversation ->
                             ConversationItem(
                                 conversation = conversation,
+                                currentUserId = currentUserId,
                                 onClick = {
                                     onOpenConversation(conversation.id)
                                 }
@@ -204,8 +212,14 @@ fun ConversationListScreen(
 @Composable
 private fun ConversationItem(
     conversation: Conversation,
+    currentUserId: String,
     onClick: () -> Unit
 ) {
+    val displayTitle = rememberConversationDisplayTitle(
+        conversation = conversation,
+        currentUserId = currentUserId
+    )
+
     ListItem(
         modifier = Modifier
             .fillMaxWidth()
@@ -219,7 +233,7 @@ private fun ConversationItem(
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Text(
-                        text = conversation.displayTitle().take(1).uppercase(),
+                        text = displayTitle.take(1).uppercase(),
                         color = Color.White,
                         fontWeight = FontWeight.Bold
                     )
@@ -228,7 +242,7 @@ private fun ConversationItem(
         },
         headlineContent = {
             Text(
-                text = conversation.displayTitle(),
+                text = displayTitle,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -250,6 +264,59 @@ private fun ConversationItem(
             )
         }
     )
+}
+
+@Composable
+private fun rememberConversationDisplayTitle(
+    conversation: Conversation,
+    currentUserId: String
+): String {
+    var displayTitle by remember(
+        conversation.id,
+        conversation.title,
+        conversation.type,
+        currentUserId
+    ) {
+        mutableStateOf(conversation.defaultDisplayTitle())
+    }
+
+    LaunchedEffect(
+        conversation.id,
+        conversation.type,
+        currentUserId
+    ) {
+        if (conversation.type != ConversationType.DIRECT) {
+            displayTitle = conversation.title.ifBlank { "Nhóm chat" }
+            return@LaunchedEffect
+        }
+
+        val otherUserId = conversation.memberIds.firstOrNull { it != currentUserId }
+
+        if (otherUserId.isNullOrBlank()) {
+            displayTitle = conversation.title.ifBlank { "Người dùng" }
+            return@LaunchedEffect
+        }
+
+        FirebaseFirestore
+            .getInstance()
+            .collection("users")
+            .document(otherUserId)
+            .get()
+            .addOnSuccessListener { document ->
+                val name = document.getString("displayName")
+                    ?: document.getString("name")
+                    ?: document.getString("email")
+
+                displayTitle = name
+                    ?.takeIf { it.isNotBlank() }
+                    ?: conversation.title.ifBlank { "Người dùng" }
+            }
+            .addOnFailureListener {
+                displayTitle = conversation.title.ifBlank { "Người dùng" }
+            }
+    }
+
+    return displayTitle
 }
 
 @Composable
@@ -300,10 +367,14 @@ private fun EmptyConversationState(
     }
 }
 
-private fun Conversation.displayTitle(): String {
-    return when {
-        title.isNotBlank() -> title
-        type == ConversationType.DIRECT -> "Direct chat"
-        else -> "Group chat"
+private fun Conversation.defaultDisplayTitle(): String {
+    return when (type) {
+        ConversationType.DIRECT -> {
+            title.ifBlank { "Người dùng" }
+        }
+
+        ConversationType.GROUP -> {
+            title.ifBlank { "Nhóm chat" }
+        }
     }
 }

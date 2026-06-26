@@ -95,12 +95,25 @@ fun AppNavGraph(
         }
 
         composable(NavRoutes.Conversations) {
+            val currentUserId = authRepository.getCurrentUser()?.uid
+
+            if (currentUserId == null) {
+                navController.navigate(NavRoutes.Login) {
+                    popUpTo(NavRoutes.Conversations) {
+                        inclusive = true
+                    }
+                    launchSingleTop = true
+                }
+                return@composable
+            }
+
             val conversationListViewModel: ConversationListViewModel = viewModel(
+                key = "conversation_list_$currentUserId",
                 factory = object : ViewModelProvider.Factory {
                     @Suppress("UNCHECKED_CAST")
                     override fun <T : ViewModel> create(modelClass: Class<T>): T {
                         return ConversationListViewModel(
-                            authRepository = authRepository,
+                            currentUserId = currentUserId,
                             observeConversationsUseCase = observeConversationsUseCase
                         ) as T
                     }
@@ -119,6 +132,8 @@ fun AppNavGraph(
                     navController.navigate(NavRoutes.Profile)
                 },
                 onLogout = {
+                    conversationListViewModel.stopObservingConversations()
+
                     authViewModel.logout {
                         navigateAndClear(NavRoutes.Login)
                     }

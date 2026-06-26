@@ -63,12 +63,15 @@ class AuthViewModel(
     }
 
     fun logout(onComplete: () -> Unit) {
-        repo.logout()
-        loginSuccess.value = false
-        errorMessage.value = null
-        onComplete()
-    }
+        isLoading.value = true
 
+        repo.logout {
+            isLoading.value = false
+            loginSuccess.value = false
+            errorMessage.value = null
+            onComplete()
+        }
+    }
     fun onGoogleSignInResult(idToken: String) {
         isLoading.value = true
 
