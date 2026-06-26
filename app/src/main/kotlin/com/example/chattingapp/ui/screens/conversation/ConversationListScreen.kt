@@ -39,7 +39,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -49,15 +48,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
 import com.example.chattingapp.core.common.DateTimeFormatter
-import com.example.chattingapp.domain.model.Conversation
-import com.example.chattingapp.domain.model.ConversationType
+import com.example.chattingapp.viewmodel.ConversationListItemUiModel
 import com.example.chattingapp.viewmodel.ConversationListViewModel
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.FirebaseFirestore
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -70,10 +68,6 @@ fun ConversationListScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var showMenu by remember { mutableStateOf(false) }
-
-    val currentUserId = remember {
-        FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
-    }
 
     Scaffold(
         topBar = {
@@ -110,7 +104,10 @@ fun ConversationListScreen(
                         DropdownMenuItem(
                             text = { Text("Hồ sơ cá nhân") },
                             leadingIcon = {
-                                Icon(Icons.Default.Person, contentDescription = null)
+                                Icon(
+                                    imageVector = Icons.Default.Person,
+                                    contentDescription = null
+                                )
                             },
                             onClick = {
                                 showMenu = false
@@ -178,7 +175,7 @@ fun ConversationListScreen(
                     )
                 }
 
-                uiState.conversations.isEmpty() -> {
+                uiState.items.isEmpty() -> {
                     EmptyConversationState(
                         modifier = Modifier.align(Alignment.Center),
                         onCreateConversation = onCreateConversation
@@ -190,16 +187,16 @@ fun ConversationListScreen(
                         modifier = Modifier.fillMaxSize()
                     ) {
                         items(
-                            items = uiState.conversations,
-                            key = { it.id }
-                        ) { conversation ->
+                            items = uiState.items,
+                            key = { it.conversation.id }
+                        ) { item ->
                             ConversationItem(
-                                conversation = conversation,
-                                currentUserId = currentUserId,
+                                item = item,
                                 onClick = {
-                                    onOpenConversation(conversation.id)
+                                    onOpenConversation(item.conversation.id)
                                 }
                             )
+
                             HorizontalDivider(thickness = 0.5.dp)
                         }
                     }
@@ -211,38 +208,24 @@ fun ConversationListScreen(
 
 @Composable
 private fun ConversationItem(
-    conversation: Conversation,
-    currentUserId: String,
+    item: ConversationListItemUiModel,
     onClick: () -> Unit
 ) {
-    val displayTitle = rememberConversationDisplayTitle(
-        conversation = conversation,
-        currentUserId = currentUserId
-    )
+    val conversation = item.conversation
 
     ListItem(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
         leadingContent = {
-            Surface(
-                modifier = Modifier
-                    .size(52.dp)
-                    .clip(CircleShape),
-                color = Color(0xFF9181F4)
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Text(
-                        text = displayTitle.take(1).uppercase(),
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
+            ConversationAvatar(
+                title = item.displayTitle,
+                photoUrl = item.photoUrl
+            )
         },
         headlineContent = {
             Text(
-                text = displayTitle,
+                text = item.displayTitle,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -267,56 +250,34 @@ private fun ConversationItem(
 }
 
 @Composable
-private fun rememberConversationDisplayTitle(
-    conversation: Conversation,
-    currentUserId: String
-): String {
-    var displayTitle by remember(
-        conversation.id,
-        conversation.title,
-        conversation.type,
-        currentUserId
+private fun ConversationAvatar(
+    title: String,
+    photoUrl: String
+) {
+    Surface(
+        modifier = Modifier
+            .size(52.dp)
+            .clip(CircleShape),
+        shape = CircleShape,
+        color = Color(0xFF9181F4)
     ) {
-        mutableStateOf(conversation.defaultDisplayTitle())
-    }
-
-    LaunchedEffect(
-        conversation.id,
-        conversation.type,
-        currentUserId
-    ) {
-        if (conversation.type != ConversationType.DIRECT) {
-            displayTitle = conversation.title.ifBlank { "Nhóm chat" }
-            return@LaunchedEffect
-        }
-
-        val otherUserId = conversation.memberIds.firstOrNull { it != currentUserId }
-
-        if (otherUserId.isNullOrBlank()) {
-            displayTitle = conversation.title.ifBlank { "Người dùng" }
-            return@LaunchedEffect
-        }
-
-        FirebaseFirestore
-            .getInstance()
-            .collection("users")
-            .document(otherUserId)
-            .get()
-            .addOnSuccessListener { document ->
-                val name = document.getString("displayName")
-                    ?: document.getString("name")
-                    ?: document.getString("email")
-
-                displayTitle = name
-                    ?.takeIf { it.isNotBlank() }
-                    ?: conversation.title.ifBlank { "Người dùng" }
+        if (photoUrl.isNotBlank()) {
+            AsyncImage(
+                model = photoUrl,
+                contentDescription = "Avatar",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+        } else {
+            Box(contentAlignment = Alignment.Center) {
+                Text(
+                    text = title.take(1).uppercase(),
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold
+                )
             }
-            .addOnFailureListener {
-                displayTitle = conversation.title.ifBlank { "Người dùng" }
-            }
+        }
     }
-
-    return displayTitle
 }
 
 @Composable
@@ -363,18 +324,6 @@ private fun EmptyConversationState(
                 color = Color(0xFF9181F4),
                 fontWeight = FontWeight.SemiBold
             )
-        }
-    }
-}
-
-private fun Conversation.defaultDisplayTitle(): String {
-    return when (type) {
-        ConversationType.DIRECT -> {
-            title.ifBlank { "Người dùng" }
-        }
-
-        ConversationType.GROUP -> {
-            title.ifBlank { "Nhóm chat" }
         }
     }
 }
