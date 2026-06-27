@@ -1,10 +1,15 @@
 package com.example.chattingapp.core.navigation
 
+import android.os.SystemClock
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.remember
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
+import androidx.navigation.NavOptionsBuilder
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -13,6 +18,7 @@ import com.example.chattingapp.data.repository.AuthRepository
 import com.example.chattingapp.data.repository.ConversationRepository
 import com.example.chattingapp.data.repository.MessageRepository
 import com.example.chattingapp.data.repository.UserRepository
+import com.example.chattingapp.domain.usecase.DeleteMessageUseCase
 import com.example.chattingapp.domain.usecase.MarkAsReadUseCase
 import com.example.chattingapp.domain.usecase.ObserveConversationsUseCase
 import com.example.chattingapp.domain.usecase.ObserveMessagesUseCase
@@ -55,8 +61,51 @@ fun AppNavGraph(
     val observeMessagesUseCase = ObserveMessagesUseCase(messageRepository)
     val sendMessageUseCase = SendMessageUseCase(messageRepository)
     val markAsReadUseCase = MarkAsReadUseCase(conversationRepository)
+    val deleteMessageUseCase = DeleteMessageUseCase(messageRepository)
 
-    fun navigateAndClear(route: String) {
+    val lastNavigationTime = remember { mutableLongStateOf(0L) }
+
+    fun canNavigate(intervalMillis: Long = 700L): Boolean {
+        val now = SystemClock.elapsedRealtime()
+
+        return if (now - lastNavigationTime.longValue >= intervalMillis) {
+            lastNavigationTime.longValue = now
+            true
+        } else {
+            false
+        }
+    }
+
+    fun safeNavigate(
+        route: String,
+        intervalMillis: Long = 700L,
+        builder: NavOptionsBuilder.() -> Unit = {}
+    ) {
+        if (!canNavigate(intervalMillis)) return
+
+        navController.navigate(route) {
+            launchSingleTop = true
+            builder()
+        }
+    }
+
+    fun safePopBackStack(intervalMillis: Long = 700L) {
+        if (!canNavigate(intervalMillis)) return
+        navController.popBackStack()
+    }
+
+    fun safeNavigateAndClear(route: String) {
+        if (!canNavigate()) return
+
+        navController.navigate(route) {
+            popUpTo(navController.graph.startDestinationId) {
+                inclusive = true
+            }
+            launchSingleTop = true
+        }
+    }
+
+    fun forceNavigateAndClear(route: String) {
         navController.navigate(route) {
             popUpTo(navController.graph.startDestinationId) {
                 inclusive = true
@@ -73,23 +122,27 @@ fun AppNavGraph(
             LoginScreen(
                 viewModel = authViewModel,
                 onLoginSuccess = {
-                    navigateAndClear(NavRoutes.Conversations)
+                    forceNavigateAndClear(NavRoutes.Conversations)
                 },
                 onNavigateToRegister = {
-                    navController.navigate(NavRoutes.Register)
+                    safeNavigate(NavRoutes.Register)
                 }
             )
         }
 
         composable(NavRoutes.Register) {
+            BackHandler {
+                safePopBackStack()
+            }
+
             RegisterScreen(
                 viewModel = authViewModel,
                 onBack = {
-                    navController.popBackStack()
+                    safePopBackStack()
                 },
                 onRegisterSuccess = {
                     authViewModel.resetLoginSuccess()
-                    navigateAndClear(NavRoutes.Conversations)
+                    forceNavigateAndClear(NavRoutes.Conversations)
                 }
             )
         }
@@ -98,12 +151,7 @@ fun AppNavGraph(
             val currentUserId = authRepository.getCurrentUser()?.uid
 
             if (currentUserId == null) {
-                navController.navigate(NavRoutes.Login) {
-                    popUpTo(NavRoutes.Conversations) {
-                        inclusive = true
-                    }
-                    launchSingleTop = true
-                }
+                forceNavigateAndClear(NavRoutes.Login)
                 return@composable
             }
 
@@ -114,7 +162,8 @@ fun AppNavGraph(
                     override fun <T : ViewModel> create(modelClass: Class<T>): T {
                         return ConversationListViewModel(
                             currentUserId = currentUserId,
-                            observeConversationsUseCase = observeConversationsUseCase
+                            observeConversationsUseCase = observeConversationsUseCase,
+                            userRepository = userRepository
                         ) as T
                     }
                 }
@@ -123,25 +172,31 @@ fun AppNavGraph(
             ConversationListScreen(
                 viewModel = conversationListViewModel,
                 onOpenConversation = { conversationId ->
-                    navController.navigate(NavRoutes.chatDetail(conversationId))
+                    safeNavigate(NavRoutes.chatDetail(conversationId))
                 },
                 onCreateConversation = {
-                    navController.navigate(NavRoutes.Search)
+                    safeNavigate(NavRoutes.Search)
                 },
                 onNavigateToProfile = {
-                    navController.navigate(NavRoutes.Profile)
+                    safeNavigate(NavRoutes.Profile)
                 },
                 onLogout = {
+                    if (!canNavigate(intervalMillis = 1000L)) return@ConversationListScreen
+
                     conversationListViewModel.stopObservingConversations()
 
                     authViewModel.logout {
-                        navigateAndClear(NavRoutes.Login)
+                        forceNavigateAndClear(NavRoutes.Login)
                     }
                 }
             )
         }
 
         composable(NavRoutes.Search) {
+            BackHandler {
+                safePopBackStack()
+            }
+
             val userSearchViewModel: UserSearchViewModel = viewModel(
                 factory = object : ViewModelProvider.Factory {
                     @Suppress("UNCHECKED_CAST")
@@ -158,10 +213,13 @@ fun AppNavGraph(
             UserSearchScreen(
                 viewModel = userSearchViewModel,
                 onBack = {
-                    navController.popBackStack()
+                    safePopBackStack()
                 },
                 onConversationCreated = { conversationId ->
-                    navController.navigate(NavRoutes.chatDetail(conversationId)) {
+                    safeNavigate(
+                        route = NavRoutes.chatDetail(conversationId),
+                        intervalMillis = 1000L
+                    ) {
                         popUpTo(NavRoutes.Search) {
                             inclusive = true
                         }
@@ -178,6 +236,10 @@ fun AppNavGraph(
                 }
             )
         ) { backStackEntry ->
+            BackHandler {
+                safePopBackStack()
+            }
+
             val conversationId = backStackEntry.arguments
                 ?.getString("conversationId")
                 .orEmpty()
@@ -192,7 +254,8 @@ fun AppNavGraph(
                             authRepository = authRepository,
                             observeMessagesUseCase = observeMessagesUseCase,
                             sendMessageUseCase = sendMessageUseCase,
-                            markAsReadUseCase = markAsReadUseCase
+                            markAsReadUseCase = markAsReadUseCase,
+                            deleteMessageUseCase = deleteMessageUseCase
                         ) as T
                     }
                 }
@@ -201,16 +264,20 @@ fun AppNavGraph(
             ChatDetailScreen(
                 viewModel = chatDetailViewModel,
                 onBack = {
-                    navController.popBackStack()
+                    safePopBackStack()
                 }
             )
         }
 
         composable(NavRoutes.Profile) {
+            BackHandler {
+                safePopBackStack()
+            }
+
             ProfileScreen(
                 authViewModel = authViewModel,
                 onBack = {
-                    navController.popBackStack()
+                    safePopBackStack()
                 }
             )
         }

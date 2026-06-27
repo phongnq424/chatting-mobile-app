@@ -46,6 +46,14 @@ import androidx.compose.ui.unit.dp
 import com.example.chattingapp.core.common.DateTimeFormatter
 import com.example.chattingapp.domain.model.Message
 import com.example.chattingapp.viewmodel.ChatDetailViewModel
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.text.font.FontStyle
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -103,7 +111,7 @@ fun ChatDetailScreen(
                 uiState.isLoading -> {
                     CircularProgressIndicator(
                         modifier = Modifier.align(Alignment.Center),
-                        color = Color(0xFF9181F4)
+                        color = MaterialTheme.colorScheme.primary
                     )
                 }
 
@@ -128,7 +136,11 @@ fun ChatDetailScreen(
                         ) { message ->
                             MessageBubble(
                                 message = message,
-                                isMe = message.senderId == uiState.currentUserId
+                                isMe = message.senderId == uiState.currentUserId,
+                                isDeleting = uiState.deletingMessageIds.contains(message.id),
+                                onDeleteMessage = {
+                                    viewModel.deleteMessage(message)
+                                }
                             )
                         }
                     }
@@ -182,7 +194,7 @@ private fun ChatInputBar(
                 },
                 shape = RoundedCornerShape(16.dp),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = Color(0xFF9181F4),
+                    focusedBorderColor = MaterialTheme.colorScheme.primary,
                     unfocusedBorderColor = Color.LightGray
                 ),
                 maxLines = 4
@@ -195,7 +207,7 @@ private fun ChatInputBar(
                 enabled = text.isNotBlank() && !isSending,
                 modifier = Modifier.size(48.dp),
                 colors = IconButtonDefaults.iconButtonColors(
-                    containerColor = Color(0xFF9181F4),
+                    containerColor = MaterialTheme.colorScheme.primary,
                     contentColor = Color.White,
                     disabledContainerColor = Color.LightGray,
                     disabledContentColor = Color.White
@@ -218,11 +230,19 @@ private fun ChatInputBar(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun MessageBubble(
     message: Message,
-    isMe: Boolean
+    isMe: Boolean,
+    isDeleting: Boolean,
+    onDeleteMessage: () -> Unit
 ) {
+    var showDeleteDialog by remember { mutableStateOf(false) }
+
+    val isDeleted = message.deletedAt != null
+    val canDelete = isMe && !isDeleted && !isDeleting
+
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = if (isMe) Alignment.End else Alignment.Start
@@ -237,8 +257,23 @@ private fun MessageBubble(
         }
 
         Surface(
-            color = if (isMe) Color(0xFF9181F4) else Color.White,
-            contentColor = if (isMe) Color.White else Color.Black,
+            modifier = Modifier.combinedClickable(
+                enabled = canDelete,
+                onClick = {},
+                onLongClick = {
+                    showDeleteDialog = true
+                }
+            ),
+            color = when {
+                isDeleted -> Color(0xFFE0E0E0)
+                isMe -> MaterialTheme.colorScheme.primary
+                else -> Color.White
+            },
+            contentColor = when {
+                isDeleted -> Color.DarkGray
+                isMe -> Color.White
+                else -> Color.Black
+            },
             shape = RoundedCornerShape(
                 topStart = 16.dp,
                 topEnd = 16.dp,
@@ -251,17 +286,62 @@ private fun MessageBubble(
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
             ) {
                 Text(
-                    text = message.text,
-                    style = MaterialTheme.typography.bodyLarge
+                    text = when {
+                        isDeleting -> "Đang thu hồi..."
+                        isDeleted -> "Tin nhắn đã được thu hồi"
+                        else -> message.text
+                    },
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontStyle = if (isDeleted) FontStyle.Italic else FontStyle.Normal
                 )
 
                 Text(
                     text = DateTimeFormatter.formatChatTime(message.createdAt),
                     style = MaterialTheme.typography.labelSmall,
-                    color = if (isMe) Color.White.copy(alpha = 0.75f) else Color.Gray,
+                    color = when {
+                        isDeleted -> Color.Gray
+                        isMe -> Color.White.copy(alpha = 0.75f)
+                        else -> Color.Gray
+                    },
                     modifier = Modifier.align(Alignment.End)
                 )
             }
         }
+    }
+
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showDeleteDialog = false
+            },
+            title = {
+                Text("Thu hồi tin nhắn?")
+            },
+            text = {
+                Text("Tin nhắn sẽ được hiển thị là đã được thu hồi với tất cả người trong cuộc trò chuyện.")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDeleteDialog = false
+                        onDeleteMessage()
+                    }
+                ) {
+                    Text(
+                        text = "Thu hồi",
+                        color = Color.Red
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showDeleteDialog = false
+                    }
+                ) {
+                    Text("Hủy")
+                }
+            }
+        )
     }
 }

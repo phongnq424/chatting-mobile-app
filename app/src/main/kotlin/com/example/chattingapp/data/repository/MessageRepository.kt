@@ -89,6 +89,7 @@ class MessageRepository {
         )
 
         val conversationUpdate = mapOf(
+            "lastMessageId" to messageId,
             "lastMessageText" to cleanText,
             "lastMessageAt" to FieldValue.serverTimestamp(),
             "lastSenderId" to sender.uid,
@@ -125,20 +126,48 @@ class MessageRepository {
 
     suspend fun softDeleteMessage(
         conversationId: String,
-        messageId: String
+        messageId: String,
+        currentUserId: String
     ) {
-        db.collection("conversations")
+        val conversationRef = db.collection("conversations")
             .document(conversationId)
+
+        val messageRef = conversationRef
             .collection("messages")
             .document(messageId)
-            .update(
-                mapOf(
-                    "text" to "",
-                    "deletedAt" to FieldValue.serverTimestamp(),
-                    "type" to "SYSTEM"
+
+        val messageSnapshot = messageRef.get().await()
+        val message = messageSnapshot.toObject(MessageDto::class.java)
+            ?: throw IllegalStateException("Tin nhắn không tồn tại")
+
+        if (message.senderId != currentUserId) {
+            throw IllegalStateException("Bạn chỉ có thể thu hồi tin nhắn của mình")
+        }
+
+        if (message.deletedAt != null) return
+
+        val updates = mapOf(
+            "text" to "",
+            "attachments" to emptyList<Map<String, Any>>(),
+            "deletedAt" to FieldValue.serverTimestamp()
+        )
+
+        val conversationSnapshot = conversationRef.get().await()
+        val lastMessageId = conversationSnapshot.getString("lastMessageId")
+
+        db.runBatch { batch ->
+            batch.update(messageRef, updates)
+
+            if (lastMessageId == messageId) {
+                batch.update(
+                    conversationRef,
+                    mapOf(
+                        "lastMessageText" to "Tin nhắn đã được thu hồi",
+                        "updatedAt" to FieldValue.serverTimestamp()
+                    )
                 )
-            )
-            .await()
+            }
+        }.await()
     }
 
     suspend fun markMessageAsRead(
