@@ -75,12 +75,12 @@ fun ProfileScreen(
                                 CircularProgressIndicator(
                                     modifier = Modifier.size(20.dp),
                                     strokeWidth = 2.dp,
-                                    color = Color(0xFF9181F4)
+                                    color = MaterialTheme.colorScheme.primary
                                 )
                             } else {
                                 Text(
                                     "LƯU",
-                                    color = Color(0xFF9181F4),
+                                    color = MaterialTheme.colorScheme.primary,
                                     fontWeight = FontWeight.Bold
                                 )
                             }
@@ -90,7 +90,7 @@ fun ProfileScreen(
                             Icon(
                                 Icons.Default.Edit,
                                 contentDescription = "Edit",
-                                tint = Color(0xFF9181F4)
+                                tint = MaterialTheme.colorScheme.primary
                             )
                         }
                     }
@@ -118,7 +118,7 @@ fun ProfileScreen(
                             imagePickerLauncher.launch("image/*")
                         },
                     shape = CircleShape,
-                    color = Color(0xFF9181F4),
+                    color = MaterialTheme.colorScheme.primary,
                     shadowElevation = 4.dp
                 ) {
                     if (avatarUrl.isNotBlank()) {
@@ -155,7 +155,7 @@ fun ProfileScreen(
                         Icon(
                             imageVector = Icons.Default.Edit,
                             contentDescription = "Change avatar",
-                            tint = Color(0xFF9181F4),
+                            tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -242,7 +242,7 @@ fun InfoRow(
         Icon(
             icon,
             contentDescription = null,
-            tint = Color(0xFF9181F4),
+            tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.size(24.dp)
         )
 

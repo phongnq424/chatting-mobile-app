@@ -142,7 +142,7 @@ fun ConversationListScreen(
         floatingActionButton = {
             FloatingActionButton(
                 onClick = onCreateConversation,
-                containerColor = Color(0xFF9181F4),
+                containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = Color.White,
                 elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 4.dp)
             ) {
@@ -164,7 +164,7 @@ fun ConversationListScreen(
                 uiState.isLoading -> {
                     CircularProgressIndicator(
                         modifier = Modifier.align(Alignment.Center),
-                        color = Color(0xFF9181F4)
+                        color = MaterialTheme.colorScheme.primary
                     )
                 }
 
@@ -260,7 +260,7 @@ private fun ConversationAvatar(
             .size(52.dp)
             .clip(CircleShape),
         shape = CircleShape,
-        color = Color(0xFF9181F4)
+        color = MaterialTheme.colorScheme.primary
     ) {
         if (photoUrl.isNotBlank()) {
             AsyncImage(
@@ -315,14 +315,14 @@ private fun EmptyConversationState(
             Icon(
                 imageVector = Icons.Default.Add,
                 contentDescription = null,
-                tint = Color(0xFF9181F4)
+                tint = MaterialTheme.colorScheme.primary
             )
 
             Spacer(modifier = Modifier.width(8.dp))
 
             Text(
                 text = "Tạo cuộc trò chuyện",
-                color = Color(0xFF9181F4),
+                color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.SemiBold
             )
         }

@@ -156,7 +156,7 @@ fun UserSearchScreen(
                 singleLine = true,
                 shape = RoundedCornerShape(16.dp),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = Color(0xFF9181F4)
+                    focusedBorderColor = MaterialTheme.colorScheme.primary
                 )
             )
 
@@ -167,7 +167,7 @@ fun UserSearchScreen(
                 modifier = Modifier.fillMaxWidth(),
                 enabled = !isBusy,
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFF9181F4)
+                    containerColor = MaterialTheme.colorScheme.primary
                 ),
                 shape = RoundedCornerShape(14.dp)
             ) {
@@ -234,7 +234,7 @@ private fun UserItem(
                 modifier = Modifier
                     .size(48.dp)
                     .clip(CircleShape),
-                color = Color(0xFF9181F4)
+                color = MaterialTheme.colorScheme.primary
             ) {
                 if (user.photoUrl.isNotBlank()) {
                     AsyncImage(
@@ -270,13 +270,13 @@ private fun UserItem(
             if (isCreating) {
                 CircularProgressIndicator(
                     modifier = Modifier.size(18.dp),
-                    color = Color(0xFF9181F4),
+                    color = MaterialTheme.colorScheme.primary,
                     strokeWidth = 2.dp
                 )
             } else {
                 Text(
                     text = "Nhắn tin",
-                    color = Color(0xFF9181F4),
+                    color = MaterialTheme.colorScheme.primary,
                     style = MaterialTheme.typography.labelMedium
                 )
             }

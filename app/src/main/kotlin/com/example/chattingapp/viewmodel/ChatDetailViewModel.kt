@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.chattingapp.data.repository.AuthRepository
 import com.example.chattingapp.domain.model.Message
+import com.example.chattingapp.domain.usecase.DeleteMessageUseCase
 import com.example.chattingapp.domain.usecase.MarkAsReadUseCase
 import com.example.chattingapp.domain.usecase.ObserveMessagesUseCase
 import com.example.chattingapp.domain.usecase.SendMessageUseCase
@@ -18,6 +19,7 @@ data class ChatDetailUiState(
     val messages: List<Message> = emptyList(),
     val inputText: String = "",
     val isSending: Boolean = false,
+    val deletingMessageIds: Set<String> = emptySet(),
     val errorMessage: String? = null
 )
 
@@ -26,7 +28,8 @@ class ChatDetailViewModel(
     private val authRepository: AuthRepository,
     private val observeMessagesUseCase: ObserveMessagesUseCase,
     private val sendMessageUseCase: SendMessageUseCase,
-    private val markAsReadUseCase: MarkAsReadUseCase
+    private val markAsReadUseCase: MarkAsReadUseCase,
+    private val deleteMessageUseCase: DeleteMessageUseCase
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(
@@ -106,6 +109,51 @@ class ChatDetailViewModel(
                 markAsReadUseCase(
                     conversationId = conversationId,
                     userId = currentUser.uid
+                )
+            }
+        }
+    }
+
+    fun deleteMessage(message: Message) {
+        val currentUserId = _uiState.value.currentUserId
+
+        if (currentUserId.isBlank()) {
+            _uiState.value = _uiState.value.copy(
+                errorMessage = "Người dùng chưa đăng nhập"
+            )
+            return
+        }
+
+        if (message.senderId != currentUserId) {
+            _uiState.value = _uiState.value.copy(
+                errorMessage = "Bạn chỉ có thể thu hồi tin nhắn của mình"
+            )
+            return
+        }
+
+        if (message.deletedAt != null) return
+
+        if (_uiState.value.deletingMessageIds.contains(message.id)) return
+
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(
+                deletingMessageIds = _uiState.value.deletingMessageIds + message.id,
+                errorMessage = null
+            )
+
+            try {
+                deleteMessageUseCase(
+                    conversationId = conversationId,
+                    messageId = message.id,
+                    currentUserId = currentUserId
+                )
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    errorMessage = e.localizedMessage ?: "Thu hồi tin nhắn thất bại"
+                )
+            } finally {
+                _uiState.value = _uiState.value.copy(
+                    deletingMessageIds = _uiState.value.deletingMessageIds - message.id
                 )
             }
         }

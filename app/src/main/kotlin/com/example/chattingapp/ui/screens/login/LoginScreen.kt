@@ -95,7 +95,7 @@ fun LoginScreen(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Don't have an account?", style = MaterialTheme.typography.bodySmall)
                 TextButton(onClick = onNavigateToRegister) {
-                    Text("Get Started", color = Color(0xFF9181F4))
+                    Text("Get Started", color = MaterialTheme.colorScheme.primary)
                 }
             }
         }
@@ -168,7 +168,7 @@ fun LoginScreen(
                         .fillMaxWidth()
                         .height(56.dp),
                     shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF9181F4)),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                     enabled = !viewModel.isLoading.value
                 ) {
                     if (viewModel.isLoading.value) {
